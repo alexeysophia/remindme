@@ -1,0 +1,16 @@
+# Build outputs
+build/
+app/build/
+.gradle/
+.kotlin/
+
+# Local config — never commit
+local.properties
+app/google-services.json
+
+# IDE
+.idea/
+*.iml
+
+# Claude Code
+.claude/

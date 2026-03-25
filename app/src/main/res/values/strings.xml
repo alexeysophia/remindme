@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">FamilyVoice</string>
+    <string name="tile_record">Записать напоминание</string>
+
+    <!-- Tabs -->
+    <string name="tab_on_me">На мне</string>
+    <string name="tab_outgoing">Исходящие</string>
+    <string name="tab_all">Все</string>
+
+    <!-- Record button hints -->
+    <string name="hint_hold_to_record">Удерживайте для записи</string>
+    <string name="hint_release_to_pause">Отпустите — пауза</string>
+    <string name="hint_swipe_up_to_send">Свайп вверх — отправить</string>
+    <string name="hint_swipe_down_to_cancel">Свайп вниз — отменить</string>
+
+    <!-- Errors -->
+    <string name="error_no_task_extracted">Не удалось распознать задачу. Попробуйте снова.</string>
+</resources>

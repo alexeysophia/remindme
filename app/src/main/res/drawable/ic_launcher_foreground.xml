@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Mic icon centred in the safe zone (72dp inner circle) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,42c4.97,0 8.97,-4.03 8.97,-9L62.97,24c0,-4.97 -4.03,-9 -8.97,-9s-9,4.03 -9,9l0,9c0,4.97 4.03,9 9,9zM69.9,42c0,9 -7.62,15.3 -15.9,15.3S38.1,51 38.1,42L33,42c0,10.23 8.16,18.69 18,20.16L51,69l6,0 0,-6.84c9.84,-1.44 18,-9.93 18,-20.16l-5.1,0z" />
+</vector>
