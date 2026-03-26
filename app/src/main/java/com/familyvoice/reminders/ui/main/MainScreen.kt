@@ -1,5 +1,9 @@
 package com.familyvoice.reminders.ui.main
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,11 +27,16 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.familyvoice.reminders.domain.model.RecordingState
 
@@ -43,13 +52,31 @@ fun MainScreen(
     onNavigateToSettings: () -> Unit,
     viewModel: MainViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val context  = LocalContext.current
+    val uiState  by viewModel.uiState.collectAsState()
 
-    val statusText: String = uiState.displayMessage ?: when (uiState.recordingState) {
-        RecordingState.Idle       -> "Удерживайте кнопку для записи"
-        RecordingState.Recording  -> "Запись..."
-        RecordingState.Paused     -> "Пауза"
-        RecordingState.Processing -> "Отправка в Gemini..."
+    // ── Audio permission state ────────────────────────────────────────────────
+    var hasAudioPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.RECORD_AUDIO,
+            ) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        hasAudioPermission = granted
+    }
+
+    // ── Status label text ─────────────────────────────────────────────────────
+    val statusText: String = uiState.displayMessage ?: when {
+        !hasAudioPermission                          -> "Нажмите кнопку, чтобы разрешить микрофон"
+        uiState.recordingState == RecordingState.Idle       -> "Удерживайте кнопку для записи"
+        uiState.recordingState == RecordingState.Recording  -> "Запись..."
+        uiState.recordingState == RecordingState.Paused     -> "Пауза"
+        uiState.recordingState == RecordingState.Processing -> "Отправка в Gemini..."
+        else                                         -> ""
     }
 
     Scaffold(
@@ -104,7 +131,7 @@ fun MainScreen(
                 )
             }
 
-            // ── Status / hint label ───────────────────────────────────────────
+            // ── Animated status label ─────────────────────────────────────────
             Crossfade(targetState = statusText, label = "status") { text ->
                 Text(
                     text  = text,
@@ -118,7 +145,13 @@ fun MainScreen(
             // ── Giant record button ───────────────────────────────────────────
             RecordButton(
                 recordingState = uiState.recordingState,
-                onPressStart   = viewModel::startRecording,
+                onPressStart   = {
+                    if (hasAudioPermission) {
+                        viewModel.startRecording()
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
                 onRelease      = viewModel::pauseRecording,
                 onSwipeUp      = viewModel::finalizeRecording,
                 onSwipeDown    = viewModel::cancelRecording,
