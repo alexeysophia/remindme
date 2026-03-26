@@ -19,7 +19,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,13 +26,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(viewModel: AuthViewModel = hiltViewModel()) {
     val state   by viewModel.state.collectAsState()
     val context = LocalContext.current
-    val scope   = rememberCoroutineScope()
 
     Box(
         modifier         = Modifier.fillMaxSize(),
@@ -65,7 +62,7 @@ fun LoginScreen(viewModel: AuthViewModel = hiltViewModel()) {
                 CircularProgressIndicator()
             } else {
                 Button(
-                    onClick  = { scope.launch { viewModel.signInWithGoogle(context) } },
+                    onClick  = { viewModel.signInWithGoogle(context) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
