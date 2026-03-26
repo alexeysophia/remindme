@@ -45,7 +45,7 @@ class GeminiService @Inject constructor(
 
         return try {
             val model = GenerativeModel(
-                modelName        = "gemini-1.5-flash",
+                modelName        = "gemini-2.5-flash",
                 apiKey           = apiKey,
                 generationConfig = generationConfig {
                     responseMimeType = "application/json"
