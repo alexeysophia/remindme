@@ -19,16 +19,12 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     companion object {
-        /** Set by [RecordTileService] to auto-start recording on launch. */
         const val EXTRA_START_RECORDING = "extra_start_recording"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Edge-to-edge: let Compose own insets for maximum visual space
         enableEdgeToEdge()
-
-        val startRecording = intent.getBooleanExtra(EXTRA_START_RECORDING, false)
 
         setContent {
             FamilyVoiceTheme {
@@ -36,8 +32,9 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     NavHost(navController = navController, startDestination = "main") {
                         composable("main") {
-                            MainScreen()
-                            // TODO: if startRecording, trigger ViewModel.startRecording()
+                            MainScreen(
+                                onNavigateToSettings = { navController.navigate("settings") },
+                            )
                         }
                         composable("settings") {
                             SettingsScreen(onBack = { navController.popBackStack() })
@@ -50,9 +47,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        // Handle re-launch from Quick Settings Tile while app is already alive
-        if (intent.getBooleanExtra(EXTRA_START_RECORDING, false)) {
-            // TODO: signal ViewModel to start recording
-        }
+        // TODO: signal ViewModel to auto-start recording when launched from QS Tile
     }
 }
