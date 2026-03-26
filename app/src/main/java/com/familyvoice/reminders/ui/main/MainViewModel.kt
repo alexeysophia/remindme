@@ -4,11 +4,16 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.familyvoice.reminders.data.audio.VoiceRecorder
+import com.familyvoice.reminders.data.gemini.GeminiResult
+import com.familyvoice.reminders.data.gemini.GeminiService
 import com.familyvoice.reminders.domain.model.RecordingState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -27,19 +32,24 @@ data class MainUiState(
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val voiceRecorder: VoiceRecorder,
+    private val geminiService: GeminiService,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
+
+    /** One-shot events (Toast messages) consumed by the UI. */
+    private val _toast = MutableSharedFlow<String>()
+    val toast: SharedFlow<String> = _toast.asSharedFlow()
 
     fun selectTab(tab: HomeTab) {
         _uiState.update { it.copy(selectedTab = tab) }
     }
 
     /**
-     * Called on button press:
-     * - [RecordingState.Idle]   → start a new recording
-     * - [RecordingState.Paused] → resume the paused recording
+     * Press & Hold:
+     * - [RecordingState.Idle]   → start fresh recording
+     * - [RecordingState.Paused] → resume existing recording
      */
     fun startRecording() {
         val current = _uiState.value.recordingState
@@ -57,30 +67,49 @@ class MainViewModel @Inject constructor(
         _uiState.update { it.copy(recordingState = RecordingState.Recording, displayMessage = null) }
     }
 
-    /** Called on button release (finger lift with no swipe). */
+    /** Release (finger lift, no swipe) → pause. */
     fun pauseRecording() {
         if (_uiState.value.recordingState != RecordingState.Recording) return
         voiceRecorder.pause()
         _uiState.update { it.copy(recordingState = RecordingState.Paused) }
     }
 
-    /** Called on swipe UP — stop and hand off to Gemini (TODO). */
+    /** Swipe UP → stop recorder, send audio to Gemini, log result. */
     fun finalizeRecording() {
         if (_uiState.value.recordingState == RecordingState.Idle) return
         _uiState.update { it.copy(recordingState = RecordingState.Processing) }
-        val file = voiceRecorder.stop()
-        if (file == null) {
+
+        val audioFile = voiceRecorder.stop()
+        if (audioFile == null) {
             Log.w(TAG, "finalizeRecording: no audio file — aborting")
             _uiState.update { it.copy(recordingState = RecordingState.Idle) }
             return
         }
-        Log.i(TAG, "Готово к отправке в Gemini: ${file.absolutePath}")
-        // TODO: send file to Gemini, parse result, create Reminder in Firestore
-        // For now reset state so the user can record again
-        _uiState.update { it.copy(recordingState = RecordingState.Idle) }
+
+        viewModelScope.launch {
+            when (val result = geminiService.process(audioFile)) {
+                is GeminiResult.NoApiKey -> {
+                    val msg = "Введите API ключ в настройках"
+                    Log.w(TAG, msg)
+                    _toast.emit(msg)
+                }
+                is GeminiResult.Failure  -> {
+                    Log.e(TAG, "Gemini error: ${result.message}")
+                    _toast.emit("Ошибка Gemini: ${result.message}")
+                }
+                is GeminiResult.Success  -> {
+                    val intent = result.intent
+                    if (intent.task == null) {
+                        _toast.emit("Задача не распознана. Попробуйте снова.")
+                    }
+                    // TODO: save to Firestore
+                }
+            }
+            _uiState.update { it.copy(recordingState = RecordingState.Idle) }
+        }
     }
 
-    /** Called on swipe DOWN — discard the recording. */
+    /** Swipe DOWN → discard recording. */
     fun cancelRecording() {
         voiceRecorder.cancel()
         _uiState.update {

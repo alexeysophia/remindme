@@ -2,6 +2,7 @@ package com.familyvoice.reminders.ui.main
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
@@ -25,6 +26,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +56,13 @@ fun MainScreen(
 ) {
     val context  = LocalContext.current
     val uiState  by viewModel.uiState.collectAsState()
+
+    // Collect one-shot Toast events from the ViewModel
+    LaunchedEffect(Unit) {
+        viewModel.toast.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
 
     // ── Audio permission state ────────────────────────────────────────────────
     var hasAudioPermission by remember {

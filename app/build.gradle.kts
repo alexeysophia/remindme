@@ -82,5 +82,11 @@ dependencies {
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
 
+    // Gemini AI
+    implementation(libs.generativeai)
+
+    // DataStore (API key persistence)
+    implementation(libs.datastore.preferences)
+
     debugImplementation(libs.androidx.ui.tooling)
 }
