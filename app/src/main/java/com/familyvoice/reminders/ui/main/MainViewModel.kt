@@ -6,15 +6,19 @@ import androidx.lifecycle.viewModelScope
 import com.familyvoice.reminders.data.audio.VoiceRecorder
 import com.familyvoice.reminders.data.gemini.GeminiResult
 import com.familyvoice.reminders.data.gemini.GeminiService
+import com.familyvoice.reminders.data.repository.ReminderRepository
 import com.familyvoice.reminders.domain.model.RecordingState
+import com.familyvoice.reminders.domain.model.ReminderItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -33,12 +37,17 @@ data class MainUiState(
 class MainViewModel @Inject constructor(
     private val voiceRecorder: VoiceRecorder,
     private val geminiService: GeminiService,
+    private val reminderRepository: ReminderRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
-    /** One-shot events (Toast messages) consumed by the UI. */
+    /** Real-time list of all reminders from Firestore. */
+    val reminders: StateFlow<List<ReminderItem>> = reminderRepository.allRemindersFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** One-shot Toast messages collected by the UI via LaunchedEffect. */
     private val _toast = MutableSharedFlow<String>()
     val toast: SharedFlow<String> = _toast.asSharedFlow()
 
@@ -46,11 +55,7 @@ class MainViewModel @Inject constructor(
         _uiState.update { it.copy(selectedTab = tab) }
     }
 
-    /**
-     * Press & Hold:
-     * - [RecordingState.Idle]   → start fresh recording
-     * - [RecordingState.Paused] → resume existing recording
-     */
+    /** Press & Hold — start or resume recording. */
     fun startRecording() {
         val current = _uiState.value.recordingState
         if (current == RecordingState.Processing) return
@@ -67,21 +72,24 @@ class MainViewModel @Inject constructor(
         _uiState.update { it.copy(recordingState = RecordingState.Recording, displayMessage = null) }
     }
 
-    /** Release (finger lift, no swipe) → pause. */
+    /** Release (no swipe) → pause. */
     fun pauseRecording() {
         if (_uiState.value.recordingState != RecordingState.Recording) return
         voiceRecorder.pause()
         _uiState.update { it.copy(recordingState = RecordingState.Paused) }
     }
 
-    /** Swipe UP → stop recorder, send audio to Gemini, log result. */
+    /**
+     * Swipe UP — stop recorder → send to Gemini → save to Firestore.
+     * Shows Toast on success / error, deletes temp file on success.
+     */
     fun finalizeRecording() {
         if (_uiState.value.recordingState == RecordingState.Idle) return
         _uiState.update { it.copy(recordingState = RecordingState.Processing) }
 
         val audioFile = voiceRecorder.stop()
         if (audioFile == null) {
-            Log.w(TAG, "finalizeRecording: no audio file — aborting")
+            Log.w(TAG, "finalizeRecording: no audio file")
             _uiState.update { it.copy(recordingState = RecordingState.Idle) }
             return
         }
@@ -89,27 +97,32 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = geminiService.process(audioFile)) {
                 is GeminiResult.NoApiKey -> {
-                    val msg = "Введите API ключ в настройках"
-                    Log.w(TAG, msg)
-                    _toast.emit(msg)
+                    _toast.emit("Введите API ключ в настройках")
                 }
-                is GeminiResult.Failure  -> {
-                    Log.e(TAG, "Gemini error: ${result.message}")
+                is GeminiResult.Failure -> {
                     _toast.emit("Ошибка Gemini: ${result.message}")
                 }
-                is GeminiResult.Success  -> {
+                is GeminiResult.Success -> {
                     val intent = result.intent
                     if (intent.task == null) {
                         _toast.emit("Задача не распознана. Попробуйте снова.")
+                    } else {
+                        reminderRepository.saveReminder(intent)
+                            .onSuccess {
+                                _toast.emit("Напоминание создано!")
+                                audioFile.delete()
+                            }
+                            .onFailure { e ->
+                                _toast.emit("Ошибка сохранения: ${e.message}")
+                            }
                     }
-                    // TODO: save to Firestore
                 }
             }
             _uiState.update { it.copy(recordingState = RecordingState.Idle) }
         }
     }
 
-    /** Swipe DOWN → discard recording. */
+    /** Swipe DOWN — discard recording. */
     fun cancelRecording() {
         voiceRecorder.cancel()
         _uiState.update {

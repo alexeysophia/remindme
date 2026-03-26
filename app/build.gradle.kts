@@ -88,5 +88,8 @@ dependencies {
     // DataStore (API key persistence)
     implementation(libs.datastore.preferences)
 
+    // Coroutines → Task.await() for Firebase
+    implementation(libs.kotlinx.coroutines.play.services)
+
     debugImplementation(libs.androidx.ui.tooling)
 }
