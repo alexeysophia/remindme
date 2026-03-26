@@ -8,7 +8,7 @@ import com.familyvoice.reminders.data.gemini.GeminiResult
 import com.familyvoice.reminders.data.gemini.GeminiService
 import com.familyvoice.reminders.data.repository.ReminderRepository
 import com.familyvoice.reminders.domain.model.RecordingState
-import com.familyvoice.reminders.domain.model.ReminderItem
+import com.familyvoice.reminders.domain.model.Reminder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -43,8 +43,8 @@ class MainViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
-    /** Real-time list of all reminders from Firestore. */
-    val reminders: StateFlow<List<ReminderItem>> = reminderRepository.allRemindersFlow()
+    /** Real-time list of all reminders from Firestore, ordered newest-first. */
+    val reminders: StateFlow<List<Reminder>> = reminderRepository.allRemindersFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** One-shot Toast messages collected by the UI via LaunchedEffect. */

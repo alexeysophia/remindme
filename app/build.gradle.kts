@@ -85,6 +85,9 @@ dependencies {
     // Gemini AI
     implementation(libs.generativeai)
 
+    // JSON parsing
+    implementation(libs.gson)
+
     // DataStore (API key persistence)
     implementation(libs.datastore.preferences)
 

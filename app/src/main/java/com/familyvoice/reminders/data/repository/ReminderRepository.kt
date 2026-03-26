@@ -1,10 +1,9 @@
 package com.familyvoice.reminders.data.repository
 
 import android.util.Log
+import com.familyvoice.reminders.domain.model.Reminder
 import com.familyvoice.reminders.domain.model.ReminderIntent
-import com.familyvoice.reminders.domain.model.ReminderItem
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
@@ -24,25 +23,31 @@ class ReminderRepository @Inject constructor(
 ) {
     /**
      * Real-time stream of all reminders ordered newest-first.
-     * Emits a new list on every Firestore change.
+     * Uses [addSnapshotListener] — emits a new list on every Firestore change.
      */
-    fun allRemindersFlow(): Flow<List<ReminderItem>> = callbackFlow {
+    fun allRemindersFlow(): Flow<List<Reminder>> = callbackFlow {
         val listener = firestore.collection(COLLECTION)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(TAG, "Snapshot error", error)
+                    Log.e(TAG, "Snapshot listener error", error)
                     return@addSnapshotListener
                 }
                 val items = snapshot?.documents?.mapNotNull { doc ->
-                    val task = doc.getString("task") ?: return@mapNotNull null
-                    ReminderItem(
-                        id        = doc.id,
-                        task      = task,
-                        assignee  = doc.getString("assignee"),
-                        deadline  = doc.getString("deadline"),
-                        creatorId = doc.getString("creatorId") ?: "",
-                    )
+                    try {
+                        val task = doc.getString("task") ?: return@mapNotNull null
+                        Reminder(
+                            id        = doc.id,
+                            task      = task,
+                            assignee  = doc.getString("assignee"),
+                            deadline  = doc.getString("deadline"),
+                            creatorId = doc.getString("creatorId") ?: "",
+                            createdAt = doc.getLong("createdAt") ?: 0L,
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Skipping malformed doc ${doc.id}", e)
+                        null
+                    }
                 } ?: emptyList()
                 trySend(items)
             }
@@ -51,7 +56,7 @@ class ReminderRepository @Inject constructor(
 
     /**
      * Persists a parsed [ReminderIntent] to Firestore.
-     * Returns [Result.failure] if the user is not authenticated or [intent.task] is null.
+     * [createdAt] is stored as Unix epoch millis (Long) for easy ordering.
      */
     suspend fun saveReminder(intent: ReminderIntent): Result<Unit> {
         val uid = auth.currentUser?.uid
@@ -65,7 +70,7 @@ class ReminderRepository @Inject constructor(
                 "assignee"  to intent.assignee,
                 "deadline"  to intent.deadline,
                 "creatorId" to uid,
-                "createdAt" to FieldValue.serverTimestamp(),
+                "createdAt" to System.currentTimeMillis(),
             )
             firestore.collection(COLLECTION).add(data).await()
             Log.i(TAG, "Reminder saved: ${intent.task}")

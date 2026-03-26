@@ -17,12 +17,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,7 +55,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.familyvoice.reminders.domain.model.RecordingState
-import com.familyvoice.reminders.domain.model.ReminderItem
+import com.familyvoice.reminders.domain.model.Reminder
 
 private val TABS = listOf(
     HomeTab.ON_ME    to "На мне",
@@ -66,7 +73,7 @@ fun MainScreen(
     val uiState   by viewModel.uiState.collectAsState()
     val reminders by viewModel.reminders.collectAsState()
 
-    // ── Permission state ──────────────────────────────────────────────────────
+    // ── Audio permission ──────────────────────────────────────────────────────
     var hasAudioPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -78,7 +85,7 @@ fun MainScreen(
         ActivityResultContracts.RequestPermission(),
     ) { granted -> hasAudioPermission = granted }
 
-    // ── Toast events from ViewModel ───────────────────────────────────────────
+    // ── Toast events ──────────────────────────────────────────────────────────
     LaunchedEffect(Unit) {
         viewModel.toast.collect { message ->
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
@@ -87,20 +94,18 @@ fun MainScreen(
 
     // ── Status label ──────────────────────────────────────────────────────────
     val statusText: String = uiState.displayMessage ?: when {
-        !hasAudioPermission                                           -> "Нажмите кнопку, чтобы разрешить микрофон"
-        uiState.recordingState == RecordingState.Idle                -> "Удерживайте кнопку для записи"
-        uiState.recordingState == RecordingState.Recording           -> "Запись..."
-        uiState.recordingState == RecordingState.Paused              -> "Пауза — свайп вверх для отправки"
-        uiState.recordingState == RecordingState.Processing          -> "Отправка в Gemini..."
-        else                                                         -> ""
+        !hasAudioPermission                                  -> "Нажмите кнопку, чтобы разрешить микрофон"
+        uiState.recordingState == RecordingState.Idle        -> "Удерживайте кнопку для записи"
+        uiState.recordingState == RecordingState.Recording   -> "Запись..."
+        uiState.recordingState == RecordingState.Paused      -> "Пауза — свайп вверх для отправки"
+        uiState.recordingState == RecordingState.Processing  -> "Отправка в Gemini..."
+        else                                                 -> ""
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(text = "RemindMe", fontWeight = FontWeight.Bold, fontSize = 24.sp)
-                },
+                title = { Text("RemindMe", fontWeight = FontWeight.Bold, fontSize = 24.sp) },
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Настройки")
@@ -165,22 +170,22 @@ fun MainScreen(
     }
 }
 
-// ── "Все" tab: real-time LazyColumn ──────────────────────────────────────────
+// ── "Все" tab ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun AllRemindersContent(reminders: List<ReminderItem>) {
+private fun AllRemindersContent(reminders: List<Reminder>) {
     if (reminders.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
-                text  = "Нет напоминаний",
+                text  = "Напоминаний пока нет",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
             )
         }
     } else {
         LazyColumn(
             contentPadding      = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(reminders, key = { it.id }) { reminder ->
                 ReminderCard(reminder)
@@ -190,31 +195,66 @@ private fun AllRemindersContent(reminders: List<ReminderItem>) {
 }
 
 @Composable
-private fun ReminderCard(reminder: ReminderItem) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
+private fun ReminderCard(reminder: Reminder) {
+    Card(
+        modifier  = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        colors    = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+
+            // ── Task (prominent) ──────────────────────────────────────────────
             Text(
-                text     = reminder.task,
-                style    = MaterialTheme.typography.titleMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                text       = reminder.task,
+                style      = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines   = 3,
+                overflow   = TextOverflow.Ellipsis,
             )
-            if (reminder.assignee != null || reminder.deadline != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    reminder.assignee?.let {
-                        Text(
-                            text  = "→ $it",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+
+            // ── Meta row (assignee + deadline) ────────────────────────────────
+            val hasMeta = reminder.assignee != null || reminder.deadline != null
+            if (hasMeta) {
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(modifier = Modifier.alpha(0.2f))
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                ) {
+                    reminder.assignee?.let { assignee ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector        = Icons.Default.Person,
+                                contentDescription = "Исполнитель",
+                                modifier           = Modifier.size(15.dp),
+                                tint               = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text  = assignee,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
-                    reminder.deadline?.let {
-                        Text(
-                            text  = "⏰ $it",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        )
+                    reminder.deadline?.let { deadline ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector        = Icons.Default.Schedule,
+                                contentDescription = "Дедлайн",
+                                modifier           = Modifier.size(15.dp),
+                                tint               = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text  = deadline,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            )
+                        }
                     }
                 }
             }
@@ -225,6 +265,10 @@ private fun ReminderCard(reminder: ReminderItem) {
 @Composable
 private fun PlaceholderContent(label: String) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = label, style = MaterialTheme.typography.titleLarge)
+        Text(
+            text  = label,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+        )
     }
 }
